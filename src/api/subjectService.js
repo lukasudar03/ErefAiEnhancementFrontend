@@ -5,6 +5,11 @@ export const getSubjects = async () => {
   return response.data;
 };
 
+export const getAvailableSubjects = async () => {
+  const response = await api.get("/Subject/available");
+  return response.data;
+};
+
 export const createSubject = async (data) => {
   const response = await api.post("/Subject", data);
   return response.data;
