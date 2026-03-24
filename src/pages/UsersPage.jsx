@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { getUsers, createUser, deleteUser } from "../api/userService";
 import { getRoles } from "../api/roleService";
 import { getSubjects } from "../api/subjectService";
-import { createStudent } from "../api/studentService";
-import { createProfessor } from "../api/professorService";
+import { getStudents, createStudent, deleteStudent } from "../api/studentService";
+import { getProfessors, createProfessor, deleteProfessor } from "../api/professorService";
 
 export default function UsersPage() {
   const [users, setUsers] = useState([]);
@@ -192,16 +192,32 @@ export default function UsersPage() {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (user) => {
     try {
-      await deleteUser(id);
+      if (user.roleName === "Student") {
+        const students = await getStudents();
+        const studentRecord = students.find((s) => s.userId === user.id);
+
+        if (studentRecord) {
+          await deleteStudent(studentRecord.id);
+        }
+      }
+
+      if (user.roleName === "Professor") {
+        const professors = await getProfessors();
+        const professorRecord = professors.find((p) => p.userId === user.id);
+
+        if (professorRecord) {
+          await deleteProfessor(professorRecord.id);
+        }
+      }
+
+      await deleteUser(user.id);
       await loadUsers();
     } catch (err) {
       console.log(err);
       setError(
-        err?.response?.data?.message ||
-        err?.response?.data?.title ||
-        "Failed to delete user."
+        err?.response?.data?.message || err?.response?.data?.title || "Failed to delete user."
       );
     }
   };
@@ -349,7 +365,7 @@ export default function UsersPage() {
               <td>{user.email}</td>
               <td>{user.roleName}</td>
               <td>
-                <button onClick={() => handleDelete(user.id)}>
+                <button onClick={() => handleDelete(user)}>
                   Delete
                 </button>
               </td>
