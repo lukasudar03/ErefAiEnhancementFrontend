@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { getUsers, createUser, deleteUser } from "../api/userService";
 import { getRoles } from "../api/roleService";
 import { getSubjects } from "../api/subjectService";
-import { createStudent } from "../api/studentService";
-import { createProfessor } from "../api/professorService";
+import { getStudents, createStudent, deleteStudent } from "../api/studentService";
+import { getProfessors, createProfessor, deleteProfessor } from "../api/professorService";
 
 export default function UsersPage() {
   const [users, setUsers] = useState([]);
@@ -69,6 +69,13 @@ export default function UsersPage() {
 
   const selectedRole = roles.find((r) => r.id === formData.roleId);
   const selectedRoleName = selectedRole?.roleName;
+
+  const departmentOptions = [
+    { value: 1, label: "Informatika" },
+    { value: 2, label: "Mehatronika" },
+    { value: 3, label: "Elektrotehnika" },
+    { value: 4, label: "Masinstvo" },
+  ];
 
   const handleUserChange = (e) => {
     const { name, value } = e.target;
@@ -185,16 +192,32 @@ export default function UsersPage() {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (user) => {
     try {
-      await deleteUser(id);
+      if (user.roleName === "Student") {
+        const students = await getStudents();
+        const studentRecord = students.find((s) => s.userId === user.id);
+
+        if (studentRecord) {
+          await deleteStudent(studentRecord.id);
+        }
+      }
+
+      if (user.roleName === "Professor") {
+        const professors = await getProfessors();
+        const professorRecord = professors.find((p) => p.userId === user.id);
+
+        if (professorRecord) {
+          await deleteProfessor(professorRecord.id);
+        }
+      }
+
+      await deleteUser(user.id);
       await loadUsers();
     } catch (err) {
       console.log(err);
       setError(
-        err?.response?.data?.message ||
-        err?.response?.data?.title ||
-        "Failed to delete user."
+        err?.response?.data?.message || err?.response?.data?.title || "Failed to delete user."
       );
     }
   };
@@ -248,42 +271,56 @@ export default function UsersPage() {
         </select>
 
         {selectedRoleName === "Student" && (
-            <>
-                <input
-                type="text"
-                name="indexNumber"
-                placeholder="Index Number"
-                value={studentData.indexNumber}
-                onChange={handleStudentChange}
-                style={styles.input}
-                />
+          <>
+            <input
+              style={styles.input}
+              type="text"
+              name="indexNumber"
+              placeholder="Index number"
+              value={studentData.indexNumber}
+              onChange={handleStudentChange}
+              required
+            />
 
-                <input
-                type="number"
-                name="yearOfStudy"
-                placeholder="Year Of Study"
-                value={studentData.yearOfStudy}
-                onChange={handleStudentChange}
-                style={styles.input}
-                />
+            <select
+              style={styles.input}
+              name="yearOfStudy"
+              value={studentData.yearOfStudy}
+              onChange={handleStudentChange}
+              required
+            >
+              <option value="">Select year of study</option>
+              <option value="1">Prva</option>
+              <option value="2">Druga</option>
+              <option value="3">Treca</option>
+              <option value="4">Master 1</option>
+              <option value="5">Master 2</option>
+            </select>
 
-                <input
-                type="date"
-                name="dateOfBirth"
-                value={studentData.dateOfBirth}
-                onChange={handleStudentChange}
-                style={styles.input}
-                />
+            <input
+              style={styles.input}
+              type="date"
+              name="dateOfBirth"
+              value={studentData.dateOfBirth}
+              onChange={handleStudentChange}
+              required
+            />
 
-                <input
-                type="number"
-                name="department"
-                placeholder="Department"
-                value={studentData.department}
-                onChange={handleStudentChange}
-                style={styles.input}
-                />
-            </>
+            <select
+              style={styles.input}
+              name="department"
+              value={studentData.department}
+              onChange={handleStudentChange}
+              required
+            >
+              <option value="">Select department</option>
+              {departmentOptions.map((department) => (
+                <option key={department.value} value={department.value}>
+                  {department.label}
+                </option>
+              ))}
+            </select>
+          </>
         )}
 
         {selectedRoleName === "Professor" && (
@@ -328,7 +365,7 @@ export default function UsersPage() {
               <td>{user.email}</td>
               <td>{user.roleName}</td>
               <td>
-                <button onClick={() => handleDelete(user.id)}>
+                <button onClick={() => handleDelete(user)}>
                   Delete
                 </button>
               </td>
