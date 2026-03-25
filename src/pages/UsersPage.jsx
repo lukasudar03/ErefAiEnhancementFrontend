@@ -1,66 +1,104 @@
 import { useEffect, useState } from "react";
-import { getUsers, createUser, deleteUser } from "../api/userService";
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Checkbox,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  Divider,
+  FormControl,
+  FormControlLabel,
+  IconButton,
+  InputLabel,
+  MenuItem,
+  Paper,
+  Select,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography
+} from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+
+import { getUsers, createUser, updateUser, deleteUser } from "../api/userService";
 import { getRoles } from "../api/roleService";
 import { getAvailableSubjects } from "../api/subjectService";
 import { getStudents, createStudent, deleteStudent } from "../api/studentService";
-import { getProfessors, createProfessor, deleteProfessor } from "../api/professorService";
+import {
+  getProfessors,
+  createProfessor,
+  deleteProfessor,
+} from "../api/professorService";
 
 export default function UsersPage() {
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [subjects, setSubjects] = useState([]);
+
   const [expandedYear, setExpandedYear] = useState(null);
   const [expandedDepartment, setExpandedDepartment] = useState(null);
+
+  const [error, setError] = useState("");
+  const [loadingCreate, setLoadingCreate] = useState(false);
+  const [openCreateModal, setOpenCreateModal] = useState(false);
+
   const [selectedProfessorYear, setSelectedProfessorYear] = useState("");
   const [selectedProfessorDepartment, setSelectedProfessorDepartment] = useState("");
-  const [error, setError] = useState("");
+
+  const [openEditModal, setOpenEditModal] = useState(false);
+  const [loadingEdit, setLoadingEdit] = useState(false);
+  const [editingUserId, setEditingUserId] = useState(null);
+
+  const [editFormData, setEditFormData] = useState({
+    name: "",
+    email: "",
+    roleId: "",
+  });
 
   const yearOptions = [
     { value: 1, label: "Prva" },
     { value: 2, label: "Druga" },
-    { value: 3, label: "Treca" },
+    { value: 3, label: "Treća" },
     { value: 4, label: "Master 1" },
     { value: 5, label: "Master 2" },
   ];
-
-  const yearLabels = Object.fromEntries(
-    yearOptions.map((y) => [y.value, y.label])
-  );
 
   const departmentOptions = [
     { value: 1, label: "Informatika" },
     { value: 2, label: "Mehatronika" },
     { value: 3, label: "Elektrotehnika" },
-    { value: 4, label: "Masinstvo" },
-    { value: 5, label: "Inzenjerski menadzment" },
+    { value: 4, label: "Mašinstvo" },
+    { value: 5, label: "Inženjerski menadžment" },
   ];
 
-  const departmentLabels = Object.fromEntries(
-    departmentOptions.map((d) => [d.value, d.label])
-  );
-
-  const groupedSubjects = subjects.reduce((acc, subject) => {
-    const yearKey = subject.yearOfStudy;
-    const departmentKey = subject.department;
-
-    if (!acc[yearKey]) {
-      acc[yearKey] = {};
-    }
-
-    if (!acc[yearKey][departmentKey]) {
-      acc[yearKey][departmentKey] = [];
-    }
-
-    acc[yearKey][departmentKey].push(subject);
-
-    return acc;
-  }, {});
+  const filteredProfessorSubjects =
+    selectedProfessorYear && selectedProfessorDepartment
+      ? subjects.filter(
+          (subject) =>
+            Number(subject.yearOfStudy) === Number(selectedProfessorYear) &&
+            Number(subject.department) === Number(selectedProfessorDepartment)
+        )
+      : [];
 
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
-    roleId: ""
+    roleId: "",
   });
 
   const [studentData, setStudentData] = useState({
@@ -68,13 +106,16 @@ export default function UsersPage() {
     indexNumber: "",
     yearOfStudy: "",
     dateOfBirth: "",
-    department: ""
+    department: "",
   });
 
   const [professorData, setProfessorData] = useState({
     userId: "",
-    subjectIds: []
+    subjectIds: [],
   });
+
+  const selectedRole = roles.find((r) => r.id === formData.roleId);
+  const selectedRoleName = selectedRole?.roleName;
 
   const loadUsers = async () => {
     try {
@@ -112,76 +153,36 @@ export default function UsersPage() {
     loadSubjects();
   }, []);
 
-  const selectedRole = roles.find((r) => r.id === formData.roleId);
-  const selectedRoleName = selectedRole?.roleName;
-
-  const availableDepartmentsForProfessor = subjects
-    .filter(
-      (s) => String(s.yearOfStudy) === String(selectedProfessorYear)
-    )
-    .map((s) => s.department)
-    .filter((value, index, self) => self.indexOf(value) === index);
-
-  const filteredProfessorSubjects = subjects.filter(
-    (s) =>
-      String(s.yearOfStudy) === String(selectedProfessorYear) &&
-      String(s.department) === String(selectedProfessorDepartment)
+  const yearLabels = Object.fromEntries(yearOptions.map((y) => [y.value, y.label]));
+  const departmentLabels = Object.fromEntries(
+    departmentOptions.map((d) => [d.value, d.label])
   );
 
-  const handleUserChange = (e) => {
-    const { name, value } = e.target;
+  const groupedSubjects = subjects.reduce((acc, subject) => {
+    const yearKey = subject.yearOfStudy;
+    const departmentKey = subject.department;
 
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value
-    }));
+    if (!acc[yearKey]) {
+      acc[yearKey] = {};
+    }
+
+    if (!acc[yearKey][departmentKey]) {
+      acc[yearKey][departmentKey] = [];
+    }
+
+    acc[yearKey][departmentKey].push(subject);
+    return acc;
+  }, {});
+
+  const handleOpenCreateModal = () => {
+    setError("");
+    setOpenCreateModal(true);
   };
 
-  const handleStudentChange = (e) => {
-    const { name, value } = e.target;
-
-    setStudentData((prev) => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleProfessorChange = (e) => {
-    const { name, value } = e.target;
-
-    setProfessorData((prev) => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleProfessorSubjectChange = (subjectId) => {
-    setProfessorData((prev) => {
-        const alreadySelected = prev.subjectIds.includes(subjectId);
-
-        if (alreadySelected) {
-        return {
-            ...prev,
-            subjectIds: prev.subjectIds.filter((id) => id !== subjectId)
-        };
-        }
-
-        return {
-        ...prev,
-        subjectIds: [...prev.subjectIds, subjectId]
-        };
-    });
-  };
-
-  const handleProfessorYearChange = (e) => {
-    setSelectedProfessorYear(e.target.value);
-    setSelectedProfessorDepartment("");
-    setProfessorData((prev) => ({ ...prev, subjectIds: [] }));
-  };
-
-  const handleProfessorDepartmentChange = (e) => {
-    setSelectedProfessorDepartment(e.target.value);
-    setProfessorData((prev) => ({ ...prev, subjectIds: [] }));
+  const handleCloseCreateModal = () => {
+    if (loadingCreate) return;
+    resetForm();
+    setOpenCreateModal(false);
   };
 
   const handleYearToggle = (year) => {
@@ -193,10 +194,130 @@ export default function UsersPage() {
     setExpandedDepartment((prev) => (prev === department ? null : department));
   };
 
+  const handleUserChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+
+    if (name === "roleId") {
+      setStudentData({
+        userId: "",
+        indexNumber: "",
+        yearOfStudy: "",
+        dateOfBirth: "",
+        department: "",
+      });
+
+      setProfessorData({
+        userId: "",
+        subjectIds: [],
+      });
+
+      setSelectedProfessorYear("");
+      setSelectedProfessorDepartment("");
+      setExpandedYear(null);
+      setExpandedDepartment(null);
+    }
+  };
+
+  const handleStudentChange = (e) => {
+    const { name, value } = e.target;
+    setStudentData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleProfessorSubjectChange = (subjectId) => {
+    setProfessorData((prev) => {
+      const alreadySelected = prev.subjectIds.includes(subjectId);
+
+      if (alreadySelected) {
+        return {
+          ...prev,
+          subjectIds: prev.subjectIds.filter((id) => id !== subjectId),
+        };
+      }
+
+      return {
+        ...prev,
+        subjectIds: [...prev.subjectIds, subjectId],
+      };
+    });
+  };
+
+  const handleOpenEditModal = (user) => {
+    const matchedRole = roles.find((role) => role.roleName === user.roleName);
+
+    setEditingUserId(user.id);
+    setEditFormData({
+      name: user.name || "",
+      email: user.email || "",
+      roleId: matchedRole?.id || "",
+    });
+
+    setError("");
+    setOpenEditModal(true);
+  };
+
+  const handleCloseEditModal = () => {
+    if (loadingEdit) return;
+
+    setOpenEditModal(false);
+    setEditingUserId(null);
+    setEditFormData({
+      name: "",
+      email: "",
+      roleId: "",
+    });
+  };
+
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    setEditFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoadingEdit(true);
+
+    try {
+      await updateUser(editingUserId, editFormData);
+      await loadUsers();
+      handleCloseEditModal();
+    } catch (err) {
+      console.log(err);
+      setError(
+        err?.response?.data?.message ||
+          err?.response?.data?.title ||
+          "Failed to update user."
+      );
+    } finally {
+      setLoadingEdit(false);
+    }
+  };
+
   const resetForm = () => {
-    setFormData({ name: "", email: "", password: "", roleId: "" });
-    setStudentData({ userId: "", indexNumber: "", yearOfStudy: "", dateOfBirth: "", department: "" });
-    setProfessorData({ userId: "", subjectIds: [] });
+    setFormData({
+      name: "",
+      email: "",
+      password: "",
+      roleId: "",
+    });
+
+    setStudentData({
+      userId: "",
+      indexNumber: "",
+      yearOfStudy: "",
+      dateOfBirth: "",
+      department: "",
+    });
+
+    setProfessorData({
+      userId: "",
+      subjectIds: [],
+    });
+
     setSelectedProfessorYear("");
     setSelectedProfessorDepartment("");
     setExpandedYear(null);
@@ -207,6 +328,7 @@ export default function UsersPage() {
   const handleCreate = async (e) => {
     e.preventDefault();
     setError("");
+    setLoadingCreate(true);
 
     let createdUser = null;
 
@@ -215,17 +337,18 @@ export default function UsersPage() {
 
       if (selectedRoleName === "Student") {
         await createStudent({
-            userId: createdUser.id,
-            indexNumber: studentData.indexNumber,
-            yearOfStudy: Number(studentData.yearOfStudy),
-            dateOfBirth: studentData.dateOfBirth,
-            department: Number(studentData.department)
+          userId: createdUser.id,
+          indexNumber: studentData.indexNumber,
+          yearOfStudy: Number(studentData.yearOfStudy),
+          dateOfBirth: studentData.dateOfBirth,
+          department: Number(studentData.department),
         });
       }
 
       if (selectedRoleName === "Professor") {
         if (professorData.subjectIds.length === 0) {
           setError("Please select at least one subject.");
+          setLoadingCreate(false);
           return;
         }
 
@@ -235,9 +358,10 @@ export default function UsersPage() {
         });
       }
 
-      resetForm();
       await loadUsers();
       await loadSubjects();
+      resetForm();
+      setOpenCreateModal(false);
     } catch (err) {
       console.log(err);
       console.log(err?.response?.data);
@@ -252,9 +376,11 @@ export default function UsersPage() {
 
       setError(
         err?.response?.data?.message ||
-        err?.response?.data?.title ||
-        "Failed to create user."
+          err?.response?.data?.title ||
+          "Failed to create user."
       );
+    } finally {
+      setLoadingCreate(false);
     }
   };
 
@@ -284,272 +410,783 @@ export default function UsersPage() {
     } catch (err) {
       console.log(err);
       setError(
-        err?.response?.data?.message || err?.response?.data?.title || "Failed to delete user."
+        err?.response?.data?.message ||
+          err?.response?.data?.title ||
+          "Failed to delete user."
       );
     }
   };
 
+  const handleEditClick = (user) => {
+    handleOpenEditModal(user);
+  };
+
   return (
-    <div>
-      <h1>Users</h1>
-
-      <form onSubmit={handleCreate} style={styles.form}>
-        <h2>Create User</h2>
-
-        <input
-          type="text"
-          name="name"
-          placeholder="Name"
-          value={formData.name}
-          onChange={handleUserChange}
-          style={styles.input}
-        />
-
-        <input
-          type="email"
-          name="email"
-          placeholder="Email"
-          value={formData.email}
-          onChange={handleUserChange}
-          style={styles.input}
-        />
-
-        <input
-          type="password"
-          name="password"
-          placeholder="Password"
-          value={formData.password}
-          onChange={handleUserChange}
-          style={styles.input}
-        />
-
-        <select
-          name="roleId"
-          value={formData.roleId}
-          onChange={handleUserChange}
-          style={styles.input}
-        >
-          <option value="">Select role</option>
-          {roles.map((role) => (
-            <option key={role.id} value={role.id}>
-              {role.roleName}
-            </option>
-          ))}
-        </select>
-
-        {selectedRoleName === "Student" && (
-          <>
-            <input
-              style={styles.input}
-              type="text"
-              name="indexNumber"
-              placeholder="Index number"
-              value={studentData.indexNumber}
-              onChange={handleStudentChange}
-              required
-            />
-
-            <select
-              style={styles.input}
-              name="yearOfStudy"
-              value={studentData.yearOfStudy}
-              onChange={handleStudentChange}
-              required
-            >
-              <option value="">Select year of study</option>
-              <option value="1">Prva</option>
-              <option value="2">Druga</option>
-              <option value="3">Treca</option>
-              <option value="4">Master 1</option>
-              <option value="5">Master 2</option>
-            </select>
-
-            <input
-              style={styles.input}
-              type="date"
-              name="dateOfBirth"
-              value={studentData.dateOfBirth}
-              onChange={handleStudentChange}
-              required
-            />
-
-            <select
-              style={styles.input}
-              name="department"
-              value={studentData.department}
-              onChange={handleStudentChange}
-              required
-            >
-              <option value="">Select department</option>
-              {departmentOptions.map((department) => (
-                <option key={department.value} value={department.value}>
-                  {department.label}
-                </option>
-              ))}
-            </select>
-          </>
-        )}
-
-        {selectedRoleName === "Professor" && (
-          <>
-            <div style={styles.subjectBox}>
-              <strong>Select subjects</strong>
-
-              {Object.keys(groupedSubjects).length > 0 ? (
-                Object.keys(groupedSubjects)
-                  .sort((a, b) => Number(a) - Number(b))
-                  .map((yearKey) => (
-                    <div key={yearKey} style={{ marginTop: "10px" }}>
-                      <div
-                        style={styles.accordionHeader}
-                        onClick={() => handleYearToggle(Number(yearKey))}
-                      >
-                        {yearLabels[Number(yearKey)] || yearKey}
-                      </div>
-
-                      {expandedYear === Number(yearKey) && (
-                        <div style={styles.accordionContent}>
-                          {Object.keys(groupedSubjects[yearKey])
-                            .sort((a, b) => Number(a) - Number(b))
-                            .map((departmentKey) => (
-                              <div key={departmentKey} style={{ marginTop: "8px" }}>
-                                <div
-                                  style={styles.accordionSubHeader}
-                                  onClick={() =>
-                                    handleDepartmentToggle(Number(departmentKey))
-                                  }
-                                >
-                                  {departmentLabels[departmentKey] || departmentKey}
-                                </div>
-
-                                {expandedDepartment === Number(departmentKey) && (
-                                  <div style={styles.subjectList}>
-                                    {groupedSubjects[yearKey][departmentKey].map(
-                                      (subject) => (
-                                        <label
-                                          key={subject.id}
-                                          style={styles.checkboxLabel}
-                                        >
-                                          <input
-                                            type="checkbox"
-                                            checked={professorData.subjectIds.includes(
-                                              subject.id
-                                            )}
-                                            onChange={() =>
-                                              handleProfessorSubjectChange(subject.id)
-                                            }
-                                          />
-                                          {subject.name}
-                                        </label>
-                                      )
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                        </div>
-                      )}
-                    </div>
-                  ))
-              ) : (
-                <span>No available subjects.</span>
-              )}
-            </div>
-          </>
-        )}
-
-        <button type="submit">Create User</button>
-      </form>
-
-      {error && <p style={{ color: "red" }}>{error}</p>}
-
-      <table
-        border="1"
-        cellPadding="8"
-        style={{ borderCollapse: "collapse", width: "100%", marginTop: "24px" }}
+    <Box>
+      <Stack
+        direction={{ xs: "column", md: "row" }}
+        justifyContent="space-between"
+        alignItems={{ xs: "flex-start", md: "center" }}
+        spacing={2}
+        sx={{ mb: 3 }}
       >
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Role</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((user) => (
-            <tr key={user.id}>
-              <td>{user.name}</td>
-              <td>{user.email}</td>
-              <td>{user.roleName}</td>
-              <td>
-                <button onClick={() => handleDelete(user)}>
-                  Delete
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        <Box>
+          <Typography
+            variant="h4"
+            sx={{ fontWeight: 800, color: "#0f172a", mb: 1 }}
+          >
+            Users
+          </Typography>
+          <Typography variant="body1" sx={{ color: "#64748b" }}>
+            Pregled, dodavanje i upravljanje korisnicima.
+          </Typography>
+        </Box>
+
+        <Button
+          onClick={handleOpenCreateModal}
+          sx={{
+            height: 44,
+            px: 3,
+            borderRadius: "12px",
+            fontWeight: 700,
+          }}
+        >
+          Add User
+        </Button>
+      </Stack>
+
+      {error && !openCreateModal && (
+        <Alert severity="error" sx={{ mb: 3, borderRadius: "12px" }}>
+          {error}
+        </Alert>
+      )}
+
+      <Card
+        sx={{
+          borderRadius: "20px",
+          boxShadow: "0 10px 30px rgba(15, 23, 42, 0.08)",
+          border: "1px solid #e2e8f0",
+        }}
+      >
+        <CardContent sx={{ p: 0 }}>
+          <Box
+            sx={{
+              px: 3,
+              py: 2.5,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 2,
+              flexWrap: "wrap",
+            }}
+          >
+            <Box>
+              <Typography
+                variant="h6"
+                sx={{ fontWeight: 700, color: "#0f172a" }}
+              >
+                Users List
+              </Typography>
+              <Typography variant="body2" sx={{ color: "#64748b", mt: 0.5 }}>
+                Trenutno registrovani korisnici u sistemu.
+              </Typography>
+            </Box>
+
+            <Chip
+              label={`${users.length} users`}
+              sx={{
+                fontWeight: 700,
+                backgroundColor: "#dbeafe",
+                color: "#1d4ed8",
+                borderRadius: "10px",
+              }}
+            />
+          </Box>
+
+          <Divider />
+
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ backgroundColor: "#f8fafc" }}>
+                  <TableCell sx={{ fontWeight: 700 }}>Name</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Email</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Role</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }} align="right">
+                    Actions
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+
+              <TableBody>
+                {users.length > 0 ? (
+                  users.map((user) => (
+                    <TableRow
+                      key={user.id}
+                      hover
+                      sx={{
+                        "&:last-child td": { borderBottom: 0 },
+                      }}
+                    >
+                      <TableCell>{user.name}</TableCell>
+                      <TableCell>{user.email}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={user.roleName}
+                          size="small"
+                          sx={{
+                            borderRadius: "8px",
+                            fontWeight: 600,
+                            backgroundColor: "#eef2ff",
+                            color: "#3730a3",
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          justifyContent="flex-end"
+                        >
+                          <Button
+                            variant="outlined"
+                            onClick={() => handleEditClick(user)}
+                            sx={{ borderRadius: "10px", fontWeight: 600 }}
+                          >
+                            Edit
+                          </Button>
+
+                          <Button
+                            color="error"
+                            variant="outlined"
+                            onClick={() => handleDelete(user)}
+                            sx={{ borderRadius: "10px", fontWeight: 600 }}
+                          >
+                            Delete
+                          </Button>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={4}>
+                      <Box sx={{ py: 4, textAlign: "center", color: "#64748b" }}>
+                        No users found.
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
+
+      <Dialog
+        open={openCreateModal}
+        onClose={handleCloseCreateModal}
+        maxWidth="md"
+        fullWidth
+        scroll="paper"
+        PaperProps={{
+          sx: {
+            borderRadius: "22px",
+            overflow: "hidden",
+            width: "100%",
+            maxHeight: "90vh",
+            boxShadow: "0 24px 60px rgba(15, 23, 42, 0.18)",
+          },
+        }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            px: 3,
+            py: 2.2,
+            borderBottom: "1px solid #e2e8f0",
+            background:
+              "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+          }}
+        >
+          <Box>
+            <Typography
+              sx={{
+                fontWeight: 800,
+                fontSize: "1.2rem",
+                color: "#0f172a",
+                lineHeight: 1.2,
+              }}
+            >
+              Add User
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "#64748b",
+                mt: 0.5,
+              }}
+            >
+              Unesi podatke i kreiraj novog korisnika.
+            </Typography>
+          </Box>
+
+          <IconButton
+            onClick={handleCloseCreateModal}
+            disabled={loadingCreate}
+            sx={{
+              color: "#475569",
+              backgroundColor: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              "&:hover": {
+                backgroundColor: "#e2e8f0",
+              },
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </Box>
+
+        <Box component="form" onSubmit={handleCreate}>
+          <DialogContent
+            dividers
+            sx={{
+              px: 3,
+              py: 3,
+              backgroundColor: "#f8fafc",
+              maxHeight: "calc(90vh - 150px)",
+              overflowY: "auto",
+            }}
+          >
+            {error && (
+              <Alert severity="error" sx={{ mb: 3, borderRadius: "12px" }}>
+                {error}
+              </Alert>
+            )}
+
+            <Stack spacing={2.5}>
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2.5,
+                  borderRadius: "18px",
+                  border: "1px solid #e2e8f0",
+                  backgroundColor: "#ffffff",
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontWeight: 700,
+                    color: "#0f172a",
+                    mb: 2,
+                  }}
+                >
+                  Basic information
+                </Typography>
+
+                <Stack spacing={2}>
+                  <TextField
+                    label="Name"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleUserChange}
+                    required
+                  />
+
+                  <TextField
+                    label="Email"
+                    name="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={handleUserChange}
+                    required
+                  />
+
+                  <TextField
+                    label="Password"
+                    name="password"
+                    type="password"
+                    value={formData.password}
+                    onChange={handleUserChange}
+                    required
+                  />
+
+                  <FormControl fullWidth required>
+                    <InputLabel>Role</InputLabel>
+                    <Select
+                      label="Role"
+                      name="roleId"
+                      value={formData.roleId}
+                      onChange={handleUserChange}
+                    >
+                      {roles.map((role) => (
+                        <MenuItem key={role.id} value={role.id}>
+                          {role.roleName}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Stack>
+              </Paper>
+
+              {selectedRoleName === "Student" && (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2.5,
+                    borderRadius: "18px",
+                    border: "1px solid #dbeafe",
+                    background:
+                      "linear-gradient(180deg, #eff6ff 0%, #ffffff 100%)",
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontWeight: 700,
+                      color: "#1e3a8a",
+                      mb: 2,
+                    }}
+                  >
+                    Student details
+                  </Typography>
+
+                  <Stack spacing={2}>
+                    <TextField
+                      label="Index Number"
+                      name="indexNumber"
+                      value={studentData.indexNumber}
+                      onChange={handleStudentChange}
+                      required
+                    />
+
+                    <FormControl fullWidth required>
+                      <InputLabel>Year of Study</InputLabel>
+                      <Select
+                        label="Year of Study"
+                        name="yearOfStudy"
+                        value={studentData.yearOfStudy}
+                        onChange={handleStudentChange}
+                      >
+                        {yearOptions.map((year) => (
+                          <MenuItem key={year.value} value={year.value}>
+                            {year.label}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+
+                    <TextField
+                      label="Date of Birth"
+                      name="dateOfBirth"
+                      type="date"
+                      value={studentData.dateOfBirth}
+                      onChange={handleStudentChange}
+                      InputLabelProps={{ shrink: true }}
+                      required
+                    />
+
+                    <FormControl fullWidth required>
+                      <InputLabel>Department</InputLabel>
+                      <Select
+                        label="Department"
+                        name="department"
+                        value={studentData.department}
+                        onChange={handleStudentChange}
+                      >
+                        {departmentOptions.map((department) => (
+                          <MenuItem key={department.value} value={department.value}>
+                            {department.label}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Stack>
+                </Paper>
+              )}
+
+              {selectedRoleName === "Professor" && (
+                <Box sx={{ mt: 1 }}>
+                  <Typography
+                    sx={{
+                      fontWeight: 700,
+                      color: "#0f172a",
+                      mb: 1.5,
+                    }}
+                  >
+                    Professor details
+                  </Typography>
+
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "#64748b",
+                      mb: 2,
+                    }}
+                  >
+                    Izaberi godinu, zatim department, pa predmete.
+                  </Typography>
+
+                  {Object.keys(groupedSubjects).length > 0 ? (
+                    <Stack spacing={1.25}>
+                      {Object.keys(groupedSubjects)
+                        .sort((a, b) => Number(a) - Number(b))
+                        .map((yearKey) => {
+                          const yearNumber = Number(yearKey);
+
+                          return (
+                            <Accordion
+                              key={yearKey}
+                              expanded={expandedYear === yearNumber}
+                              onChange={() => handleYearToggle(yearNumber)}
+                              disableGutters
+                              elevation={0}
+                              sx={{
+                                border: "1px solid #e2e8f0",
+                                borderRadius: "14px !important",
+                                backgroundColor: "#ffffff",
+                                overflow: "hidden",
+                                "&:before": {
+                                  display: "none",
+                                },
+                              }}
+                            >
+                              <AccordionSummary
+                                expandIcon={<ExpandMoreIcon />}
+                                sx={{
+                                  px: 2,
+                                  py: 0.5,
+                                  minHeight: 56,
+                                  "& .MuiAccordionSummary-content": {
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    my: 1,
+                                  },
+                                }}
+                              >
+                                <Typography sx={{ fontWeight: 700, color: "#0f172a" }}>
+                                  {yearLabels[yearNumber] || yearKey}
+                                </Typography>
+                              </AccordionSummary>
+
+                              <AccordionDetails
+                                sx={{
+                                  pt: 0,
+                                  pb: 1.5,
+                                  px: 1.5,
+                                  backgroundColor: "#f8fafc",
+                                }}
+                              >
+                                <Stack spacing={1}>
+                                  {Object.keys(groupedSubjects[yearKey])
+                                    .sort((a, b) => Number(a) - Number(b))
+                                    .map((departmentKey) => {
+                                      const departmentNumber = Number(departmentKey);
+
+                                      return (
+                                        <Accordion
+                                          key={departmentKey}
+                                          expanded={
+                                            expandedYear === yearNumber &&
+                                            expandedDepartment === departmentNumber
+                                          }
+                                          onChange={() => handleDepartmentToggle(departmentNumber)}
+                                          disableGutters
+                                          elevation={0}
+                                          sx={{
+                                            border: "1px solid #dbeafe",
+                                            borderRadius: "12px !important",
+                                            backgroundColor: "#ffffff",
+                                            overflow: "hidden",
+                                            "&:before": {
+                                              display: "none",
+                                            },
+                                          }}
+                                        >
+                                          <AccordionSummary
+                                            expandIcon={<ExpandMoreIcon />}
+                                            sx={{
+                                              px: 2,
+                                              py: 0.25,
+                                              minHeight: 50,
+                                              "& .MuiAccordionSummary-content": {
+                                                my: 1,
+                                              },
+                                            }}
+                                          >
+                                            <Typography
+                                              sx={{
+                                                fontWeight: 600,
+                                                color: "#1e3a8a",
+                                              }}
+                                            >
+                                              {departmentLabels[departmentNumber] || departmentKey}
+                                            </Typography>
+                                          </AccordionSummary>
+
+                                          <AccordionDetails
+                                            sx={{
+                                              px: 2,
+                                              pb: 1.5,
+                                              pt: 0.5,
+                                              backgroundColor: "#ffffff",
+                                            }}
+                                          >
+                                            <Stack spacing={0.5}>
+                                              {groupedSubjects[yearKey][departmentKey].map((subject) => (
+                                                <FormControlLabel
+                                                  key={subject.id}
+                                                  sx={{
+                                                    mx: 0,
+                                                    px: 1,
+                                                    py: 0.5,
+                                                    borderRadius: "10px",
+                                                    "&:hover": {
+                                                      backgroundColor: "#f8fafc",
+                                                    },
+                                                  }}
+                                                  control={
+                                                    <Checkbox
+                                                      checked={professorData.subjectIds.includes(subject.id)}
+                                                      onChange={() =>
+                                                        handleProfessorSubjectChange(subject.id)
+                                                      }
+                                                    />
+                                                  }
+                                                  label={
+                                                    <Typography sx={{ fontSize: "0.95rem" }}>
+                                                      {subject.name}
+                                                    </Typography>
+                                                  }
+                                                />
+                                              ))}
+                                            </Stack>
+                                          </AccordionDetails>
+                                        </Accordion>
+                                      );
+                                    })}
+                                </Stack>
+                              </AccordionDetails>
+                            </Accordion>
+                          );
+                        })}
+                    </Stack>
+                  ) : (
+                    <Alert severity="info" sx={{ borderRadius: "12px" }}>
+                      No available subjects.
+                    </Alert>
+                  )}
+                </Box>
+              )}
+            </Stack>
+          </DialogContent>
+
+          <DialogActions
+            sx={{
+              px: 3,
+              py: 2.2,
+              borderTop: "1px solid #e2e8f0",
+              backgroundColor: "#ffffff",
+              justifyContent: "space-between",
+            }}
+          >
+            <Typography variant="body2" sx={{ color: "#64748b" }}>
+              Popuni obavezna polja pre čuvanja.
+            </Typography>
+
+            <Stack direction="row" spacing={1.5}>
+              <Button
+                type="button"
+                variant="outlined"
+                onClick={handleCloseCreateModal}
+                disabled={loadingCreate}
+                sx={{ borderRadius: "12px", fontWeight: 700 }}
+              >
+                Cancel
+              </Button>
+
+              <Button
+                type="submit"
+                disabled={loadingCreate}
+                sx={{ borderRadius: "12px", fontWeight: 700, px: 3 }}
+              >
+                {loadingCreate ? "Creating..." : "Create User"}
+              </Button>
+            </Stack>
+          </DialogActions>
+        </Box>
+      </Dialog>
+      <Dialog
+        open={openEditModal}
+        onClose={handleCloseEditModal}
+        maxWidth="sm"
+        fullWidth
+        scroll="paper"
+        PaperProps={{
+          sx: {
+            borderRadius: "22px",
+            overflow: "hidden",
+            maxHeight: "90vh",
+            boxShadow: "0 24px 60px rgba(15, 23, 42, 0.18)",
+          },
+        }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            px: 3,
+            py: 2.2,
+            borderBottom: "1px solid #e2e8f0",
+            background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+          }}
+        >
+          <Box>
+            <Typography
+              sx={{
+                fontWeight: 800,
+                fontSize: "1.2rem",
+                color: "#0f172a",
+                lineHeight: 1.2,
+              }}
+            >
+              Edit User
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "#64748b",
+                mt: 0.5,
+              }}
+            >
+              Izmeni osnovne podatke korisnika.
+            </Typography>
+          </Box>
+
+          <IconButton
+            onClick={handleCloseEditModal}
+            disabled={loadingEdit}
+            sx={{
+              color: "#475569",
+              backgroundColor: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              "&:hover": {
+                backgroundColor: "#e2e8f0",
+              },
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </Box>
+
+        <Box component="form" onSubmit={handleEditSubmit}>
+          <DialogContent
+            dividers
+            sx={{
+              px: 3,
+              py: 3,
+              backgroundColor: "#f8fafc",
+            }}
+          >
+            {error && (
+              <Alert severity="error" sx={{ mb: 3, borderRadius: "12px" }}>
+                {error}
+              </Alert>
+            )}
+
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2.5,
+                borderRadius: "18px",
+                border: "1px solid #e2e8f0",
+                backgroundColor: "#ffffff",
+              }}
+            >
+              <Typography
+                sx={{
+                  fontWeight: 700,
+                  color: "#0f172a",
+                  mb: 2,
+                }}
+              >
+                Basic information
+              </Typography>
+
+              <Stack spacing={2}>
+                <TextField
+                  label="Name"
+                  name="name"
+                  value={editFormData.name}
+                  onChange={handleEditChange}
+                  required
+                />
+
+                <TextField
+                  label="Email"
+                  name="email"
+                  type="email"
+                  value={editFormData.email}
+                  onChange={handleEditChange}
+                  required
+                />
+
+                <FormControl fullWidth required>
+                  <InputLabel>Role</InputLabel>
+                  <Select
+                    label="Role"
+                    name="roleId"
+                    value={editFormData.roleId}
+                    onChange={handleEditChange}
+                  >
+                    {roles.map((role) => (
+                      <MenuItem key={role.id} value={role.id}>
+                        {role.roleName}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Stack>
+            </Paper>
+          </DialogContent>
+
+          <DialogActions
+            sx={{
+              px: 3,
+              py: 2.2,
+              borderTop: "1px solid #e2e8f0",
+              backgroundColor: "#ffffff",
+              justifyContent: "space-between",
+            }}
+          >
+            <Typography variant="body2" sx={{ color: "#64748b" }}>
+              Sačuvaj izmene korisnika.
+            </Typography>
+
+            <Stack direction="row" spacing={1.5}>
+              <Button
+                type="button"
+                variant="outlined"
+                onClick={handleCloseEditModal}
+                disabled={loadingEdit}
+                sx={{ borderRadius: "12px", fontWeight: 700 }}
+              >
+                Cancel
+              </Button>
+
+              <Button
+                type="submit"
+                disabled={loadingEdit}
+                sx={{ borderRadius: "12px", fontWeight: 700, px: 3 }}
+              >
+                {loadingEdit ? "Saving..." : "Save Changes"}
+              </Button>
+            </Stack>
+          </DialogActions>
+        </Box>
+      </Dialog>
+    </Box>
   );
 }
-
-const styles = {
-  form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "12px",
-    maxWidth: "400px",
-    marginBottom: "24px"
-  },
-  input: {
-    padding: "10px",
-    fontSize: "16px"
-  },
-  subjectBox: {
-   display: "flex",
-   flexDirection: "column",
-   gap: "8px",
-   padding: "12px",
-   border: "1px solid #ccc",
-   borderRadius: "8px"
-  },
-  checkboxLabel: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px"
-  },
-  accordionHeader: {
-    padding: "10px 12px",
-    backgroundColor: "#f3f4f6",
-    border: "1px solid #d1d5db",
-    borderRadius: "6px",
-    cursor: "pointer",
-    fontWeight: "600",
-    marginTop: "6px",
-  },
-
-  accordionSubHeader: {
-    padding: "8px 12px",
-    backgroundColor: "#ffffff",
-    border: "1px solid #d1d5db",
-    borderRadius: "6px",
-    cursor: "pointer",
-    marginLeft: "12px",
-    fontWeight: "500",
-  },
-
-  accordionContent: {
-    marginTop: "6px",
-    paddingLeft: "8px",
-  },
-
-  subjectList: {
-    marginTop: "8px",
-    marginLeft: "24px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "6px",
-  },
-};
