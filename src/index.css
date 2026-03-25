@@ -1,13 +1,15 @@
-* {
-  box-sizing: border-box;
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
 }
 
 body {
-  margin: 0;
-  font-family: Arial, sans-serif;
+  background-color: #f8fafc;
 }
 
-a {
-  text-decoration: none;
-  color: inherit;
+* {
+  box-sizing: border-box;
 }
