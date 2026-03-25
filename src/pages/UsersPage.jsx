@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getUsers, createUser, deleteUser } from "../api/userService";
 import { getRoles } from "../api/roleService";
-import { getSubjects } from "../api/subjectService";
+import { getAvailableSubjects } from "../api/subjectService";
 import { getStudents, createStudent, deleteStudent } from "../api/studentService";
 import { getProfessors, createProfessor, deleteProfessor } from "../api/professorService";
 
@@ -9,7 +9,52 @@ export default function UsersPage() {
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [subjects, setSubjects] = useState([]);
+  const [expandedYear, setExpandedYear] = useState(null);
+  const [expandedDepartment, setExpandedDepartment] = useState(null);
+  const [selectedProfessorYear, setSelectedProfessorYear] = useState("");
+  const [selectedProfessorDepartment, setSelectedProfessorDepartment] = useState("");
   const [error, setError] = useState("");
+
+  const yearOptions = [
+    { value: 1, label: "Prva" },
+    { value: 2, label: "Druga" },
+    { value: 3, label: "Treca" },
+    { value: 4, label: "Master 1" },
+    { value: 5, label: "Master 2" },
+  ];
+
+  const yearLabels = Object.fromEntries(
+    yearOptions.map((y) => [y.value, y.label])
+  );
+
+  const departmentOptions = [
+    { value: 1, label: "Informatika" },
+    { value: 2, label: "Mehatronika" },
+    { value: 3, label: "Elektrotehnika" },
+    { value: 4, label: "Masinstvo" },
+    { value: 5, label: "Inzenjerski menadzment" },
+  ];
+
+  const departmentLabels = Object.fromEntries(
+    departmentOptions.map((d) => [d.value, d.label])
+  );
+
+  const groupedSubjects = subjects.reduce((acc, subject) => {
+    const yearKey = subject.yearOfStudy;
+    const departmentKey = subject.department;
+
+    if (!acc[yearKey]) {
+      acc[yearKey] = {};
+    }
+
+    if (!acc[yearKey][departmentKey]) {
+      acc[yearKey][departmentKey] = [];
+    }
+
+    acc[yearKey][departmentKey].push(subject);
+
+    return acc;
+  }, {});
 
   const [formData, setFormData] = useState({
     name: "",
@@ -53,11 +98,11 @@ export default function UsersPage() {
 
   const loadSubjects = async () => {
     try {
-        const data = await getSubjects();
-        setSubjects(data);
+      const data = await getAvailableSubjects();
+      setSubjects(data);
     } catch (err) {
-        console.log(err);
-        setError("Failed to load subjects.");
+      console.log(err);
+      setError("Failed to load subjects.");
     }
   };
 
@@ -70,12 +115,18 @@ export default function UsersPage() {
   const selectedRole = roles.find((r) => r.id === formData.roleId);
   const selectedRoleName = selectedRole?.roleName;
 
-  const departmentOptions = [
-    { value: 1, label: "Informatika" },
-    { value: 2, label: "Mehatronika" },
-    { value: 3, label: "Elektrotehnika" },
-    { value: 4, label: "Masinstvo" },
-  ];
+  const availableDepartmentsForProfessor = subjects
+    .filter(
+      (s) => String(s.yearOfStudy) === String(selectedProfessorYear)
+    )
+    .map((s) => s.department)
+    .filter((value, index, self) => self.indexOf(value) === index);
+
+  const filteredProfessorSubjects = subjects.filter(
+    (s) =>
+      String(s.yearOfStudy) === String(selectedProfessorYear) &&
+      String(s.department) === String(selectedProfessorDepartment)
+  );
 
   const handleUserChange = (e) => {
     const { name, value } = e.target;
@@ -122,26 +173,35 @@ export default function UsersPage() {
     });
   };
 
+  const handleProfessorYearChange = (e) => {
+    setSelectedProfessorYear(e.target.value);
+    setSelectedProfessorDepartment("");
+    setProfessorData((prev) => ({ ...prev, subjectIds: [] }));
+  };
+
+  const handleProfessorDepartmentChange = (e) => {
+    setSelectedProfessorDepartment(e.target.value);
+    setProfessorData((prev) => ({ ...prev, subjectIds: [] }));
+  };
+
+  const handleYearToggle = (year) => {
+    setExpandedDepartment(null);
+    setExpandedYear((prev) => (prev === year ? null : year));
+  };
+
+  const handleDepartmentToggle = (department) => {
+    setExpandedDepartment((prev) => (prev === department ? null : department));
+  };
+
   const resetForm = () => {
-    setFormData({
-      name: "",
-      email: "",
-      password: "",
-      roleId: ""
-    });
-
-    setStudentData({
-      userId: "",
-      indexNumber: "",
-      yearOfStudy: "",
-      dateOfBirth: "",
-      department: ""
-    });
-
-    setProfessorData({
-      userId: "",
-      subjectIds: []
-    });
+    setFormData({ name: "", email: "", password: "", roleId: "" });
+    setStudentData({ userId: "", indexNumber: "", yearOfStudy: "", dateOfBirth: "", department: "" });
+    setProfessorData({ userId: "", subjectIds: [] });
+    setSelectedProfessorYear("");
+    setSelectedProfessorDepartment("");
+    setExpandedYear(null);
+    setExpandedDepartment(null);
+    setError("");
   };
 
   const handleCreate = async (e) => {
@@ -164,14 +224,20 @@ export default function UsersPage() {
       }
 
       if (selectedRoleName === "Professor") {
+        if (professorData.subjectIds.length === 0) {
+          setError("Please select at least one subject.");
+          return;
+        }
+
         await createProfessor({
-            userId: createdUser.id,
-            subjectIds: professorData.subjectIds
+          userId: createdUser.id,
+          subjectIds: professorData.subjectIds,
         });
       }
 
       resetForm();
       await loadUsers();
+      await loadSubjects();
     } catch (err) {
       console.log(err);
       console.log(err?.response?.data);
@@ -214,6 +280,7 @@ export default function UsersPage() {
 
       await deleteUser(user.id);
       await loadUsers();
+      await loadSubjects();
     } catch (err) {
       console.log(err);
       setError(
@@ -324,20 +391,71 @@ export default function UsersPage() {
         )}
 
         {selectedRoleName === "Professor" && (
+          <>
             <div style={styles.subjectBox}>
-                <p>Select subjects</p>
+              <strong>Select subjects</strong>
 
-                {subjects.map((subject) => (
-                <label key={subject.id} style={styles.checkboxLabel}>
-                    <input
-                    type="checkbox"
-                    checked={professorData.subjectIds.includes(subject.id)}
-                    onChange={() => handleProfessorSubjectChange(subject.id)}
-                    />
-                    {subject.name}
-                </label>
-                ))}
+              {Object.keys(groupedSubjects).length > 0 ? (
+                Object.keys(groupedSubjects)
+                  .sort((a, b) => Number(a) - Number(b))
+                  .map((yearKey) => (
+                    <div key={yearKey} style={{ marginTop: "10px" }}>
+                      <div
+                        style={styles.accordionHeader}
+                        onClick={() => handleYearToggle(Number(yearKey))}
+                      >
+                        {yearLabels[Number(yearKey)] || yearKey}
+                      </div>
+
+                      {expandedYear === Number(yearKey) && (
+                        <div style={styles.accordionContent}>
+                          {Object.keys(groupedSubjects[yearKey])
+                            .sort((a, b) => Number(a) - Number(b))
+                            .map((departmentKey) => (
+                              <div key={departmentKey} style={{ marginTop: "8px" }}>
+                                <div
+                                  style={styles.accordionSubHeader}
+                                  onClick={() =>
+                                    handleDepartmentToggle(Number(departmentKey))
+                                  }
+                                >
+                                  {departmentLabels[departmentKey] || departmentKey}
+                                </div>
+
+                                {expandedDepartment === Number(departmentKey) && (
+                                  <div style={styles.subjectList}>
+                                    {groupedSubjects[yearKey][departmentKey].map(
+                                      (subject) => (
+                                        <label
+                                          key={subject.id}
+                                          style={styles.checkboxLabel}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={professorData.subjectIds.includes(
+                                              subject.id
+                                            )}
+                                            onChange={() =>
+                                              handleProfessorSubjectChange(subject.id)
+                                            }
+                                          />
+                                          {subject.name}
+                                        </label>
+                                      )
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  ))
+              ) : (
+                <span>No available subjects.</span>
+              )}
             </div>
+          </>
         )}
 
         <button type="submit">Create User</button>
@@ -401,5 +519,37 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: "8px"
-  }
+  },
+  accordionHeader: {
+    padding: "10px 12px",
+    backgroundColor: "#f3f4f6",
+    border: "1px solid #d1d5db",
+    borderRadius: "6px",
+    cursor: "pointer",
+    fontWeight: "600",
+    marginTop: "6px",
+  },
+
+  accordionSubHeader: {
+    padding: "8px 12px",
+    backgroundColor: "#ffffff",
+    border: "1px solid #d1d5db",
+    borderRadius: "6px",
+    cursor: "pointer",
+    marginLeft: "12px",
+    fontWeight: "500",
+  },
+
+  accordionContent: {
+    marginTop: "6px",
+    paddingLeft: "8px",
+  },
+
+  subjectList: {
+    marginTop: "8px",
+    marginLeft: "24px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  },
 };
